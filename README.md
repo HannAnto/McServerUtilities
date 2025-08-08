@@ -73,16 +73,53 @@ This tool ensures a clean and organized setup for each server instance.
 
 *📁 Backups*
 
-Backups are managed via `McServerBackup`.
-It writes world paths to:
+The McServerBackup tool handles automatic and manual backups of your Minecraft server worlds.
+
+🛠 First-Time Setup
+
+On first launch, everything is set up automatically.
+To configure which servers should be backed up, add their folder paths (one per line) to:
 
 
-~/Documents/Server backups/serverbackup.txt
+~/Documents/McServerBackups/serverbackup.txt
 
 
-You can automate backups or run them manually.
+🔁 Automatic Backups
+
+A launch agent runs in the background and creates backups every 30 minutes for all listed paths.
+Backups are stored in:
+
+
+~/Documents/McServerBackups
+
+
+🖱️ Manual Backups
+
+You can also double-click the backup tool at any time to trigger an instant backup.
 
 ---
+
+📊 ⁠ -status ⁠
+
+Use this flag to check the current backup status:
+
+•⁠  ⁠Lists all active server paths from ⁠ serverbackup.txt ⁠
+•⁠  ⁠Shows the timestamp of the last successful backup
+•⁠  ⁠Confirms whether the launch agent is running correctly
+
+---
+
+🧹 ⁠ -uninstall ⁠
+
+Use this flag to remove the backup system:
+
+•⁠  ⁠Deletes the ⁠ serverbackup.txt ⁠ configuration file
+•⁠  ⁠Uninstalls the launch agent responsible for automatic backups
+
+This will fully disable automated backups and clean up related files.
+
+---
+
 
 *🧊 Releases*
 
