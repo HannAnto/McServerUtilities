@@ -1,11 +1,30 @@
-//  McServerDownloader
 //
-//  Created by Hannes Müller on 01.08.25.
+//  McServerDownloader.swift
+//  Created by Hannes Müller on 01.08.25
 //
+
 import Foundation
 
 let fileManager = FileManager.default
 let homeDir = NSHomeDirectory()
+let mcServerRoot = "\(homeDir)/Documents/McServer"
+
+// 🔹 URL zur Forge-Versionen-Datei (z. B. GitHub raw link)
+let forgeVersionURL = "https://raw.githubusercontent.com/HannAnto/McServerUtilities/main/forge_versions.txt"
+
+// 🔹 Funktion: Forge-Versionen aus Online-Datei laden
+func loadForgeVersions(from urlString: String) -> [String] {
+    guard let url = URL(string: urlString),
+          let content = try? String(contentsOf: url, encoding:.utf8) else {
+        print("❌ Konnte Forge-Versionen nicht laden.")
+        return []
+}
+
+    return content
+.split(separator: "\n")
+.map { $0.trimmingCharacters(in:.whitespacesAndNewlines)}
+.filter {!$0.isEmpty && $0.contains("-")}
+}
 
 // 🔹 Funktion: Nächster verfügbarer Ordnername
 func nextAvailableFolder(baseName: String, in parent: String) -> String {
@@ -18,14 +37,36 @@ func nextAvailableFolder(baseName: String, in parent: String) -> String {
     return folder
 }
 
+// 🔹 Funktion: Datei herunterladen
+func downloadFile(from urlString: String, to destinationPath: String) throws {
+    guard let url = URL(string: urlString) else {
+        throw NSError(domain: "Invalid URL", code: 1)
+}
+    let data = try Data(contentsOf: url)
+    try data.write(to: URL(fileURLWithPath: destinationPath))
+}
+
+// 🔹 Funktion: Forge Installer ausführen
+func runForgeInstaller(at installerPath: String, in directory: String) throws {
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/java")
+    task.arguments = ["-jar", installerPath, "--installServer"]
+    task.currentDirectoryURL = URL(fileURLWithPath: directory)
+    try task.run()
+    task.waitUntilExit()
+}
+
+// 🔹 Funktion: Forge-URL generieren
+func generateForgeURL(from version: String) -> String {
+    return "https://maven.minecraftforge.net/net/minecraftforge/forge/\(version)/forge-\(version)-installer.jar"
+}
+
 // 🔹 Zielordner vorbereiten
-let mcServerRoot = "\(homeDir)/Documents/McServer"
 try? fileManager.createDirectory(atPath: mcServerRoot, withIntermediateDirectories: true)
 let serverFolder = nextAvailableFolder(baseName: "NewServer", in: mcServerRoot)
 
-// 🔹 Begrüßung & Auswahl
 print("""
-🧲 Download Mc Server
+🧲 Minecraft Server Downloader
 V - Vanilla   F - Forge
 """)
 
@@ -34,101 +75,58 @@ guard let choice = readLine()?.uppercased() else {
     exit(1)
 }
 
-if choice == "V" {
-    print("📦 Starte Download des Vanilla Servers...")
+do {
+    try fileManager.createDirectory(atPath: serverFolder, withIntermediateDirectories: true)
+    print("📁 Ordner erstellt unter: \(serverFolder)")
 
-    // 🔹 Aktuelle Vanilla-URL (z. B. Minecraft 1.20.6)
-    let jarURL = "https://piston-data.mojang.com/v1/objects/6bce4ef400e4efaa63a13d5e6f6b500be969ef81/server.jar"
-    let jarDestination = "\(serverFolder)/server.jar"
+    switch choice {
+    case "V":
+        print("📦 Starte Download des Vanilla Servers...")
+        let jarURL = "https://piston-data.mojang.com/v1/objects/6bce4ef400e4efaa63a13d5e6f6b500be969ef81/server.jar"
+        let jarDestination = "\(serverFolder)/server.jar"
+        try downloadFile(from: jarURL, to: jarDestination)
+        print("✅ Vanilla Server heruntergeladen und gespeichert als server.jar")
 
-    do {
-        try fileManager.createDirectory(atPath: serverFolder, withIntermediateDirectories: true)
-        print("📁 Ordner erstellt unter: \(serverFolder)")
-} catch {
-        print("❌ Fehler beim Erstellen des Ordners: \(error)")
-        exit(1)
+    case "F":
+        print("🔄 Lade Forge-Versionen aus dem Internet...")
+        let forgeVersions = loadForgeVersions(from: forgeVersionURL)
+
+        if forgeVersions.isEmpty {
+            print("❌ Keine Forge-Versionen gefunden.")
+            exit(1)
 }
 
-    guard let url = URL(string: jarURL) else {
-        print("❌ Ungültige URL")
-        exit(1)
+        print("🔢 Verfügbare Forge-Versionen:")
+        for (index, version) in forgeVersions.enumerated() {
+            print("[\(index)] \(version)")
 }
 
-    do {
-        let data = try Data(contentsOf: url)
-        try data.write(to: URL(fileURLWithPath: jarDestination))
-        print("✅ Download erfolgreich")
-        print("💾 Gespeichert als: server.jar")
-} catch {
-        print("❌ Fehler beim Download oder Speichern: \(error)")
-        exit(1)
+        print("👉 Wähle eine Version durch Eingabe der Nummer:")
+        guard let input = readLine(), let index = Int(input), forgeVersions.indices.contains(index) else {
+            print("❌ Ungültige Auswahl.")
+            exit(1)
 }
 
-    print("🎉 Fertig! Vanilla Server wurde erfolgreich eingerichtet.")
-}
+        let selectedVersion = forgeVersions[index]
+        let installerURL = generateForgeURL(from: selectedVersion)
+        let installerPath = "\(serverFolder)/forge-installer.jar"
 
-else if choice == "F" {
-    print("Which Version? 1.20.1 or 1.21.8")
-    guard let version = readLine(), ["1.20.1", "1.21.8"].contains(version) else {
-        print("❌ Version nicht verfügbar oder ungültig.")
-        exit(1)
-}
+        print("📦 Lade Forge Installer für Version \(selectedVersion)...")
+        try downloadFile(from: installerURL, to: installerPath)
 
-    let installerURL: String
-    switch version {
-    case "1.20.1":
-        installerURL = "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.6/forge-1.20.1-47.4.6-installer.jar"
-    case "1.21.8":
-        installerURL = "https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.8-58.0.5/forge-1.21.8-58.0.5-installer.jar"
-    default:
-        print("❌ Keine gültige Forge-Version.")
-        exit(1)
-}
+        print("🛠 Installiere Forge Server...")
+        try runForgeInstaller(at: installerPath, in: serverFolder)
 
-    print("📦 Starte Download von Forge \(version)...")
-    let installerPath = "\(serverFolder)/forge-installer.jar"
-
-    do {
-        try fileManager.createDirectory(atPath: serverFolder, withIntermediateDirectories: true)
-        print("📁 Ordner erstellt unter: \(serverFolder)")
-} catch {
-        print("❌ Fehler beim Erstellen des Ordners: \(error)")
-        exit(1)
-}
-
-    guard let url = URL(string: installerURL) else {
-        print("❌ Ungültige URL")
-        exit(1)
-}
-
-    do {
-        let data = try Data(contentsOf: url)
-        try data.write(to: URL(fileURLWithPath: installerPath))
-        print("✅ Download erfolgreich")
-} catch {
-        print("❌ Fehler beim Download oder Speichern: \(error)")
-        exit(1)
-}
-
-    print("🛠 Installiere Forge Server...")
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/usr/bin/java")
-    task.arguments = ["-jar", installerPath, "--installServer"]
-    task.currentDirectoryURL = URL(fileURLWithPath: serverFolder)
-
-    do {
-        try task.run()
-        task.waitUntilExit()
         print("✅ Forge Server installiert")
-} catch {
-        print("❌ Fehler beim Ausführen des Installers: \(error)")
+
+    default:
+        print("❌ Auswahl nicht erkannt.")
         exit(1)
 }
 
-    print("💾 Forge Server gespeichert in: \(serverFolder)")
-    print("🎉 Fertig!")
-}
+    print("🎉 Fertig! Server gespeichert unter: \(serverFolder)")
 
-else {
-    print("❌ Auswahl nicht erkannt.")
+} catch {
+    print("❌ Fehler: \(error.localizedDescription)")
+    exit(1)
 }
